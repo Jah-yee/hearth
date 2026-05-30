@@ -50,11 +50,14 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of LLMService
+            description: |-
+              LLMServiceSpec is the declarative, one-click description of a served model:
+              what to run, on which backend, how to scale (including to zero), and how to cache.
             properties:
               cache:
-                description: cache configures model-weight caching — the key to usable
-                  scale-to-zero.
+                description: |-
+                  CacheSpec selects how model weights are cached so cold pods load from local disk
+                  instead of re-downloading on every scale-from-zero.
                 properties:
                   prewarm:
                     description: prewarm hydrates weights into the cache before first
@@ -77,12 +80,8 @@ spec:
                     type: string
                 type: object
               endpoint:
-                description: endpoint configures the served API and cold-start client
-                  behavior.
                 properties:
                   coldStart:
-                    description: ColdStartSpec controls what a client experiences
-                      while a model scales from zero.
                     properties:
                       heartbeatInterval:
                         default: 10s
@@ -102,14 +101,10 @@ spec:
                     type: boolean
                 type: object
               model:
-                description: model selects the model to serve.
                 properties:
                   catalogRef:
-                    description: catalogRef resolves source and defaults from a model
-                      catalog.
                     type: string
                   source:
-                    description: source specifies the model location explicitly.
                     properties:
                       secretRef:
                         description: secretRef holds credentials for private sources
@@ -135,11 +130,12 @@ spec:
                     type: object
                 type: object
               resources:
-                description: resources declares the accelerator / CPU / memory request.
+                description: |-
+                  ResourceSpec is the abstract accelerator request; it maps onto the runtime's
+                  accelerator definition at reconcile time.
                 properties:
                   accelerators:
                     default: 1
-                    description: accelerators is the number of whole devices to request.
                     format: int32
                     type: integer
                   cpu:
@@ -180,7 +176,6 @@ spec:
                       type: string
                     type: array
                   name:
-                    description: name pins a specific InferenceRuntime.
                     type: string
                   selector:
                     description: selector auto-picks among runtimes by vendor preference
@@ -195,7 +190,9 @@ spec:
                     type: object
                 type: object
               scaling:
-                description: scaling configures scale-to-zero and queue-driven autoscaling.
+                description: |-
+                  ScalingSpec configures KEDA-driven autoscaling. Scaling is intentionally limited
+                  to LLM-aware signals: CPU and raw RPS are not supported.
                 properties:
                   activationTimeout:
                     default: 5m
@@ -212,7 +209,6 @@ spec:
                     type: integer
                   metric:
                     default: queueDepth
-                    description: metric drives autoscaling.
                     enum:
                     - queueDepth
                     - kvCacheUtil
@@ -235,11 +231,9 @@ spec:
             - model
             type: object
           status:
-            description: status defines the observed state of LLMService
+            description: LLMServiceStatus defines the observed state of LLMService.
             properties:
               conditions:
-                description: conditions represent the current state of the LLMService
-                  resource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -303,7 +297,6 @@ spec:
                   should call.
                 type: string
               phase:
-                description: phase is a high-level summary of the service state.
                 enum:
                 - Pending
                 - Loading
@@ -312,7 +305,6 @@ spec:
                 - Degraded
                 type: string
               replicas:
-                description: replicas is the current number of serving pods.
                 format: int32
                 type: integer
               resolvedRuntime:

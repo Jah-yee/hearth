@@ -29,22 +29,13 @@ import (
 	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
 )
 
-// ResolvedModel is the outcome of resolving spec.model into something a runtime
-// can load: a path/identifier plus any env required to fetch it.
 type ResolvedModel struct {
-	// Path is passed to the runtime as the model to serve (a repo id for now;
-	// a local cache path once caching lands).
 	Path string
-
-	// Source is the registry the model is fetched from ("hf" or "modelscope"); it
-	// selects the prewarm download command.
+	// Source ("hf" | "modelscope") selects the prewarm download command.
 	Source string
-
-	// Env is extra environment required to load the model (e.g. VLLM_USE_MODELSCOPE).
-	Env []corev1.EnvVar
+	Env    []corev1.EnvVar
 }
 
-// AcceleratorRequest is the K8s-level accelerator and scheduling derived from a runtime.
 type AcceleratorRequest struct {
 	Resources     corev1.ResourceList
 	NodeSelector  map[string]string
@@ -52,7 +43,6 @@ type AcceleratorRequest struct {
 	SchedulerName string
 }
 
-// MetricsSource tells the scaler where a runtime exposes its LLM-aware signals.
 type MetricsSource struct {
 	Path        string
 	PortName    string
@@ -73,17 +63,14 @@ type Registry struct {
 	adapters map[string]BackendAdapter
 }
 
-// NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
 	return &Registry{adapters: map[string]BackendAdapter{}}
 }
 
-// Register adds (or replaces) the adapter for its vendor.
 func (r *Registry) Register(a BackendAdapter) {
 	r.adapters[a.Vendor()] = a
 }
 
-// Get returns the adapter for a vendor.
 func (r *Registry) Get(vendor string) (BackendAdapter, bool) {
 	a, ok := r.adapters[vendor]
 	return a, ok
@@ -96,16 +83,11 @@ type TemplateData struct {
 	Accelerator AcceleratorData
 }
 
-// ModelData exposes the resolved model to templates.
 type ModelData struct{ Path string }
-
-// ServiceData exposes the LLMService identity to templates.
 type ServiceData struct{ Name, Namespace string }
-
-// AcceleratorData exposes accelerator hints (e.g. visible-device index) to templates.
 type AcceleratorData struct{ Index string }
 
-// Render expands a single Go-template string against data.
+// Render expands a Go-template string against data, failing on unknown fields.
 func Render(tmpl string, data TemplateData) (string, error) {
 	t, err := template.New("tmpl").Option("missingkey=error").Parse(tmpl)
 	if err != nil {
@@ -118,7 +100,6 @@ func Render(tmpl string, data TemplateData) (string, error) {
 	return buf.String(), nil
 }
 
-// RenderAll expands a slice of template strings.
 func RenderAll(tmpls []string, data TemplateData) ([]string, error) {
 	out := make([]string, 0, len(tmpls))
 	for _, s := range tmpls {

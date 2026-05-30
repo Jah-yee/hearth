@@ -33,7 +33,6 @@ const (
 	defaultTarget          = 10
 )
 
-// ScaledObjectName is the KEDA ScaledObject managing an LLMService's backend.
 func ScaledObjectName(svc *servingv1alpha1.LLMService) string { return svc.Name }
 
 // BuildScaledObject renders a KEDA ScaledObject that scales the backend Deployment

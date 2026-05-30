@@ -27,7 +27,6 @@ import (
 	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
 )
 
-// InferenceRuntimeReconciler reconciles a InferenceRuntime object
 type InferenceRuntimeReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -37,24 +36,13 @@ type InferenceRuntimeReconciler struct {
 // +kubebuilder:rbac:groups=serving.hearth.dev,resources=inferenceruntimes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=serving.hearth.dev,resources=inferenceruntimes/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the InferenceRuntime object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
+// Reconcile is a no-op: InferenceRuntime is a passive driver consumed by reference
+// from the LLMService reconciler.
 func (r *InferenceRuntimeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
-
-	// TODO(user): your logic here
-
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
 func (r *InferenceRuntimeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&servingv1alpha1.InferenceRuntime{}).

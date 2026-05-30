@@ -26,13 +26,10 @@ import (
 	"github.com/hearth-project/hearth/internal/backend"
 )
 
-// Vendor is the key under which this adapter registers.
 const Vendor = "nvidia"
 
-// Adapter renders NVIDIA-vLLM serving artifacts.
 type Adapter struct{}
 
-// New returns the NVIDIA adapter.
 func New() *Adapter { return &Adapter{} }
 
 var _ backend.BackendAdapter = (*Adapter)(nil)

@@ -42,15 +42,11 @@ const (
 	EnvActivationTimeout = "HEARTH_ACTIVATION_TIMEOUT"
 	EnvListenAddr        = "HEARTH_LISTEN_ADDR"
 
-	// DefaultListenAddr is where the gateway serves the OpenAI API.
 	DefaultListenAddr = ":8080"
-	// QueuePath reports the pending-request count for the scaler.
-	QueuePath = "/hearth/queue"
-	// MetricsPath serves Prometheus metrics.
-	MetricsPath = "/metrics"
+	QueuePath         = "/hearth/queue"
+	MetricsPath       = "/metrics"
 )
 
-// Config configures a Gateway.
 type Config struct {
 	BackendURL        string
 	MaxQueue          int
@@ -58,7 +54,6 @@ type Config struct {
 	RetryInterval     time.Duration
 }
 
-// ConfigFromEnv builds a Config from the gateway's environment.
 func ConfigFromEnv() Config {
 	cfg := Config{BackendURL: os.Getenv(EnvBackendURL)}
 	if v, err := strconv.Atoi(os.Getenv(EnvMaxQueue)); err == nil {
@@ -95,7 +90,6 @@ func newMetrics() *metrics {
 	return m
 }
 
-// Gateway is a buffering reverse proxy for a single backend.
 type Gateway struct {
 	cfg     Config
 	backend *url.URL
@@ -107,7 +101,6 @@ type Gateway struct {
 	now     func() time.Time
 }
 
-// New builds a Gateway, applying defaults for unset fields.
 func New(cfg Config) (*Gateway, error) {
 	u, err := url.Parse(cfg.BackendURL)
 	if err != nil {
@@ -133,10 +126,8 @@ func New(cfg Config) (*Gateway, error) {
 	}, nil
 }
 
-// Pending is the current demand signal: requests admitted and waiting or in flight.
 func (g *Gateway) Pending() int64 { return g.pending.Load() }
 
-// Handler returns the gateway's HTTP routes.
 func (g *Gateway) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })

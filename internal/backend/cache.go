@@ -28,17 +28,14 @@ import (
 )
 
 const (
-	// CacheMountPath is where model weights are cached inside the serving container.
 	CacheMountPath = "/cache"
 
 	cacheVolumeName  = "model-cache"
 	defaultCacheSize = "50Gi"
 )
 
-// CachePVCName is the PVC backing an LLMService's NodeLocalPVC cache.
 func CachePVCName(svc *servingv1alpha1.LLMService) string { return svc.Name + "-cache" }
 
-// PrewarmJobName is the Job that hydrates an LLMService's cache before traffic.
 func PrewarmJobName(svc *servingv1alpha1.LLMService) string { return svc.Name + "-prewarm" }
 
 // cacheEnv points HuggingFace and ModelScope at the mounted cache so a cold pod loads
@@ -57,7 +54,6 @@ type cacheArtifacts struct {
 	pvc    *corev1.PersistentVolumeClaim
 }
 
-// planCache resolves a cache strategy into the volume/mount/env (and PVC) it needs.
 func planCache(svc *servingv1alpha1.LLMService) (cacheArtifacts, error) {
 	strategy := svc.Spec.Cache.Strategy
 	if strategy == "" {
@@ -107,7 +103,6 @@ func planCache(svc *servingv1alpha1.LLMService) (cacheArtifacts, error) {
 	}
 }
 
-// applyCache injects the cache volume, mount and env into the serving container.
 func applyCache(pod *corev1.PodSpec, art cacheArtifacts) {
 	if art.volume == nil {
 		return
@@ -122,8 +117,6 @@ func applyCache(pod *corev1.PodSpec, art cacheArtifacts) {
 	}
 }
 
-// BuildCachePVC returns the PVC to create for the cache, or nil when the strategy
-// needs none (HostPath / None / BakedImage).
 func BuildCachePVC(svc *servingv1alpha1.LLMService) (*corev1.PersistentVolumeClaim, error) {
 	art, err := planCache(svc)
 	if err != nil {

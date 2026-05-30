@@ -41,7 +41,6 @@ import (
 
 const fieldOwner = client.FieldOwner("hearth-operator")
 
-// LLMServiceReconciler reconciles a LLMService object
 type LLMServiceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
@@ -63,8 +62,6 @@ type LLMServiceReconciler struct {
 // +kubebuilder:rbac:groups=keda.sh,resources=scaledobjects,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 
-// Reconcile renders the vLLM Deployment and Service for an LLMService from its
-// selected InferenceRuntime, then reflects the result in status.
 func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -267,7 +264,6 @@ func (r *LLMServiceReconciler) fail(ctx context.Context, svc *servingv1alpha1.LL
 	return ctrl.Result{}, err
 }
 
-// SetupWithManager sets up the controller with the Manager.
 func (r *LLMServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Backends == nil {
 		r.Backends = registry.New()

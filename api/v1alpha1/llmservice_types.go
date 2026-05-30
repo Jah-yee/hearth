@@ -25,42 +25,33 @@ import (
 // LLMServiceSpec is the declarative, one-click description of a served model:
 // what to run, on which backend, how to scale (including to zero), and how to cache.
 type LLMServiceSpec struct {
-	// model selects the model to serve.
 	Model ModelSpec `json:"model"`
 
 	// runtime selects the backend — pinned by name or auto-picked by vendor preference.
 	// +optional
 	Runtime RuntimeSelection `json:"runtime,omitempty"`
 
-	// resources declares the accelerator / CPU / memory request.
 	// +optional
 	Resources ResourceSpec `json:"resources,omitempty"`
 
-	// scaling configures scale-to-zero and queue-driven autoscaling.
 	// +optional
 	Scaling ScalingSpec `json:"scaling,omitempty"`
 
-	// cache configures model-weight caching — the key to usable scale-to-zero.
 	// +optional
 	Cache CacheSpec `json:"cache,omitempty"`
 
-	// endpoint configures the served API and cold-start client behavior.
 	// +optional
 	Endpoint EndpointSpec `json:"endpoint,omitempty"`
 }
 
-// ModelSpec resolves a model either from a catalog entry or an explicit source.
 type ModelSpec struct {
-	// catalogRef resolves source and defaults from a model catalog.
 	// +optional
 	CatalogRef string `json:"catalogRef,omitempty"`
 
-	// source specifies the model location explicitly.
 	// +optional
 	Source *ModelSource `json:"source,omitempty"`
 }
 
-// ModelSource points at model weights via a scheme-prefixed URI.
 type ModelSource struct {
 	// uri is the model location: hf:// | modelscope:// | oci:// | s3:// | pvc://
 	URI string `json:"uri"`
@@ -70,9 +61,7 @@ type ModelSource struct {
 	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
 }
 
-// RuntimeSelection chooses the backend for an LLMService.
 type RuntimeSelection struct {
-	// name pins a specific InferenceRuntime.
 	// +optional
 	Name string `json:"name,omitempty"`
 
@@ -85,7 +74,6 @@ type RuntimeSelection struct {
 	ArgsOverride []string `json:"argsOverride,omitempty"`
 }
 
-// RuntimeSelector constrains automatic backend selection.
 type RuntimeSelector struct {
 	// vendor lists acceptable vendors in preference order.
 	// +optional
@@ -95,7 +83,6 @@ type RuntimeSelector struct {
 // ResourceSpec is the abstract accelerator request; it maps onto the runtime's
 // accelerator definition at reconcile time.
 type ResourceSpec struct {
-	// accelerators is the number of whole devices to request.
 	// +kubebuilder:default=1
 	// +optional
 	Accelerators int32 `json:"accelerators,omitempty"`
@@ -132,7 +119,6 @@ type ScalingSpec struct {
 	// +optional
 	Max int32 `json:"max,omitempty"`
 
-	// metric drives autoscaling.
 	// +kubebuilder:validation:Enum=queueDepth;kvCacheUtil
 	// +kubebuilder:default=queueDepth
 	// +optional
@@ -174,7 +160,6 @@ type CacheSpec struct {
 	Prewarm bool `json:"prewarm,omitempty"`
 }
 
-// EndpointSpec configures the served API surface and cold-start client behavior.
 type EndpointSpec struct {
 	// +kubebuilder:default=true
 	// +optional
@@ -184,7 +169,6 @@ type EndpointSpec struct {
 	ColdStart ColdStartSpec `json:"coldStart,omitempty"`
 }
 
-// ColdStartSpec controls what a client experiences while a model scales from zero.
 type ColdStartSpec struct {
 	// mode is how cold requests are handled: keepalive (SSE heartbeats hold the
 	// connection) or reject (fast 503 + Retry-After for the client to retry).
@@ -198,7 +182,6 @@ type ColdStartSpec struct {
 	HeartbeatInterval metav1.Duration `json:"heartbeatInterval,omitempty"`
 }
 
-// LLMServicePhase is a high-level summary of the service lifecycle.
 // +kubebuilder:validation:Enum=Pending;Loading;Ready;ScaledToZero;Degraded
 type LLMServicePhase string
 
@@ -212,7 +195,6 @@ const (
 
 // LLMServiceStatus defines the observed state of LLMService.
 type LLMServiceStatus struct {
-	// phase is a high-level summary of the service state.
 	// +optional
 	Phase LLMServicePhase `json:"phase,omitempty"`
 
@@ -220,7 +202,6 @@ type LLMServiceStatus struct {
 	// +optional
 	ResolvedRuntime string `json:"resolvedRuntime,omitempty"`
 
-	// replicas is the current number of serving pods.
 	// +optional
 	Replicas int32 `json:"replicas,omitempty"`
 
@@ -228,7 +209,6 @@ type LLMServiceStatus struct {
 	// +optional
 	EndpointURL string `json:"endpointURL,omitempty"`
 
-	// conditions represent the current state of the LLMService resource.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -246,15 +226,12 @@ type LLMServiceStatus struct {
 type LLMService struct {
 	metav1.TypeMeta `json:",inline"`
 
-	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of LLMService
 	// +required
 	Spec LLMServiceSpec `json:"spec"`
 
-	// status defines the observed state of LLMService
 	// +optional
 	Status LLMServiceStatus `json:"status,omitzero"`
 }

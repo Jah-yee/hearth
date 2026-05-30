@@ -107,7 +107,6 @@ func WholeDeviceAccelerator(svc *servingv1alpha1.LLMService, rt *servingv1alpha1
 	}, nil
 }
 
-// MetricsFromRuntime exposes the runtime's metric mapping to the scaler.
 func MetricsFromRuntime(rt *servingv1alpha1.InferenceRuntime) MetricsSource {
 	return MetricsSource{
 		Path:        rt.Spec.Metrics.Path,
@@ -117,7 +116,6 @@ func MetricsFromRuntime(rt *servingv1alpha1.InferenceRuntime) MetricsSource {
 	}
 }
 
-// HostMount is a named read-only hostPath to project into the serving container.
 type HostMount struct {
 	Name string
 	Path string

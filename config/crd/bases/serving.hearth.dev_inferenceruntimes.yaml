@@ -52,11 +52,15 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of InferenceRuntime
+            description: |-
+              InferenceRuntimeSpec defines a pluggable inference backend (e.g. NVIDIA-vLLM,
+              vLLM-Ascend, vLLM-MLU). It adapts a vendor runtime to Kubernetes — scheduling,
+              health, model loading and metrics — without ever touching chip kernels.
             properties:
               accelerator:
-                description: accelerator maps this runtime onto a device-plugin resource
-                  and scheduling.
+                description: |-
+                  AcceleratorSpec adapts the abstract accelerator request to a concrete vendor
+                  device-plugin resource and scheduling, reusing (never replacing) HAMi/Volcano.
                 properties:
                   nodeSelector:
                     additionalProperties:
@@ -79,9 +83,8 @@ spec:
                         type: string
                     type: object
                   sharing:
-                    description: |-
-                      sharing declares whether this runtime supports fractional devices
-                      (e.g. NVIDIA via HAMi).
+                    description: sharing declares whether this runtime supports fractional
+                      devices (e.g. NVIDIA via HAMi).
                     properties:
                       supported:
                         type: boolean
@@ -297,7 +300,6 @@ spec:
                       type: object
                     type: array
                   image:
-                    description: image is the serving container image.
                     type: string
                   port:
                     description: port is the single port serving both the OpenAI API
@@ -320,11 +322,11 @@ spec:
                 type: object
               family:
                 default: vllm
-                description: family is the engine family this runtime belongs to (e.g.
-                  "vllm").
                 type: string
               health:
-                description: health configures model-load-aware probes.
+                description: |-
+                  RuntimeHealth holds model-load-aware probes. startup gives slow weight loads
+                  minutes of headroom before liveness can kill the pod.
                 properties:
                   liveness:
                     description: |-
@@ -787,8 +789,6 @@ spec:
                     type: object
                 type: object
               lifecycle:
-                description: lifecycle controls graceful drain of in-flight streams
-                  on scale-down.
                 properties:
                   preStopDrain:
                     description: |-
@@ -802,8 +802,9 @@ spec:
                     type: integer
                 type: object
               metrics:
-                description: metrics tells the Hearth Scaler where the LLM-aware signals
-                  live.
+                description: |-
+                  RuntimeMetrics maps logical scaling signals to the runtime's Prometheus metric
+                  names. vLLM serves /metrics on the same port as the API.
                 properties:
                   kvCacheUtil:
                     type: string
@@ -812,7 +813,6 @@ spec:
                     type: string
                   port:
                     default: http
-                    description: port is the metrics port name.
                     type: string
                   queueDepth:
                     description: queueDepth is the pending-requests metric used for
@@ -829,14 +829,11 @@ spec:
                 type: object
               priority:
                 default: 0
-                description: |-
-                  priority breaks ties when several runtimes match an LLMService selector
-                  (higher wins).
+                description: priority breaks ties when several runtimes match an LLMService
+                  selector (higher wins).
                 format: int32
                 type: integer
               vendor:
-                description: vendor identifies the accelerator vendor this runtime
-                  targets.
                 enum:
                 - nvidia
                 - ascend
@@ -851,11 +848,9 @@ spec:
             - vendor
             type: object
           status:
-            description: status defines the observed state of InferenceRuntime
+            description: InferenceRuntimeStatus defines the observed state of InferenceRuntime.
             properties:
               conditions:
-                description: conditions represent the current state of the InferenceRuntime
-                  resource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

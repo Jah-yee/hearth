@@ -28,7 +28,6 @@ import (
 	"github.com/hearth-project/hearth/internal/backend"
 )
 
-// Vendor is the key under which this adapter registers.
 const Vendor = "ascend"
 
 // hostDriverMounts are the standard Huawei CANN/driver paths the vLLM-Ascend container
@@ -42,10 +41,8 @@ var hostDriverMounts = []backend.HostMount{
 	{Name: "ascend-install-info", Path: "/etc/ascend_install.info"},
 }
 
-// Adapter renders vLLM-Ascend serving artifacts.
 type Adapter struct{}
 
-// New returns the Ascend adapter.
 func New() *Adapter { return &Adapter{} }
 
 var _ backend.BackendAdapter = (*Adapter)(nil)

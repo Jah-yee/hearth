@@ -26,7 +26,6 @@ import (
 	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
 )
 
-// ServingContainerName is the name of the vLLM serving container.
 const ServingContainerName = "serving"
 
 const (
@@ -52,8 +51,6 @@ func podLabels(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRun
 	return l
 }
 
-// BuildDeployment assembles the vLLM Deployment for an LLMService, using the vendor
-// adapter for the pod spec and accelerator request.
 func BuildDeployment(a BackendAdapter, svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime, m ResolvedModel) (*appsv1.Deployment, error) {
 	pod, err := a.PodSpec(svc, rt, m)
 	if err != nil {

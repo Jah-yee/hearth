@@ -38,13 +38,10 @@ const (
 	backendSvcSuffix       = "-backend"
 )
 
-// BackendServiceName is the internal Service selecting the vLLM pods; the gateway
-// forwards to it.
 func BackendServiceName(svc *servingv1alpha1.LLMService) string {
 	return svc.Name + backendSvcSuffix
 }
 
-// GatewayServiceName is the user-facing Service; it selects the gateway pods.
 func GatewayServiceName(svc *servingv1alpha1.LLMService) string { return svc.Name }
 
 func gatewaySelectorLabels(svc *servingv1alpha1.LLMService) map[string]string {
@@ -63,7 +60,6 @@ func gatewayServiceLabels(svc *servingv1alpha1.LLMService) map[string]string {
 	return l
 }
 
-// BuildBackendService is the internal ClusterIP Service the gateway forwards to.
 func BuildBackendService(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
@@ -80,7 +76,6 @@ func BuildBackendService(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.In
 	}
 }
 
-// BuildGatewayService is the user-facing ClusterIP Service routing to the gateway pods.
 func BuildGatewayService(svc *servingv1alpha1.LLMService) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
@@ -97,8 +92,6 @@ func BuildGatewayService(svc *servingv1alpha1.LLMService) *corev1.Service {
 	}
 }
 
-// BuildGatewayDeployment renders the gateway fronting one LLMService. replicas <= 0
-// falls back to defaultGatewayReplicas.
 func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, replicas int32) *appsv1.Deployment {
 	if replicas <= 0 {
 		replicas = defaultGatewayReplicas
