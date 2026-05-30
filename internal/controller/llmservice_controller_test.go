@@ -21,64 +21,112 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
+	"github.com/hearth-project/hearth/internal/backend/registry"
 )
 
 var _ = Describe("LLMService Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+	Context("When reconciling an LLMService", func() {
+		const (
+			runtimeName = "vllm-nvidia"
+			svcName     = "qwen3-8b"
+			namespace   = "default"
+		)
 
 		ctx := context.Background()
+		key := types.NamespacedName{Name: svcName, Namespace: namespace}
+		runtimeKey := types.NamespacedName{Name: runtimeName}
 
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+		reconciler := func() *LLMServiceReconciler {
+			return &LLMServiceReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), Backends: registry.New()}
 		}
-		llmservice := &servingv1alpha1.LLMService{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind LLMService")
-			err := k8sClient.Get(ctx, typeNamespacedName, llmservice)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &servingv1alpha1.LLMService{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
+			rt := &servingv1alpha1.InferenceRuntime{
+				ObjectMeta: metav1.ObjectMeta{Name: runtimeName},
+				Spec: servingv1alpha1.InferenceRuntimeSpec{
+					Family: "vllm",
+					Vendor: "nvidia",
+					Container: servingv1alpha1.RuntimeContainer{
+						Image: "vllm/vllm-openai:v0.22.0",
+						Args:  []string{"--model={{ .Model.Path }}", "--served-model-name={{ .Service.Name }}", "--port=8000"},
+						Port:  servingv1alpha1.RuntimePort{Name: "http", ContainerPort: 8000},
 					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+					Accelerator: servingv1alpha1.AcceleratorSpec{ResourceName: "nvidia.com/gpu"},
+					Metrics:     servingv1alpha1.RuntimeMetrics{Path: "/metrics", Port: "http", QueueDepth: "vllm:num_requests_waiting"},
+				},
 			}
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, rt))).To(Succeed())
+
+			svc := &servingv1alpha1.LLMService{
+				ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: namespace},
+				Spec: servingv1alpha1.LLMServiceSpec{
+					Model:   servingv1alpha1.ModelSpec{Source: &servingv1alpha1.ModelSource{URI: "modelscope://Qwen/Qwen3-8B-Instruct"}},
+					Runtime: servingv1alpha1.RuntimeSelection{Name: runtimeName},
+				},
+			}
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, svc))).To(Succeed())
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &servingv1alpha1.LLMService{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance LLMService")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			svc := &servingv1alpha1.LLMService{ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: namespace}}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, svc))).To(Succeed())
+			rt := &servingv1alpha1.InferenceRuntime{ObjectMeta: metav1.ObjectMeta{Name: runtimeName}}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, rt))).To(Succeed())
+			// owner GC does not run in envtest, so clean children explicitly
+			Expect(k8sClient.DeleteAllOf(ctx, &appsv1.Deployment{}, client.InNamespace(namespace))).To(Succeed())
+			Expect(k8sClient.DeleteAllOf(ctx, &corev1.Service{}, client.InNamespace(namespace))).To(Succeed())
 		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &LLMServiceReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
+		It("renders a Deployment and Service from the selected runtime", func() {
+			_, err := reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			dep := &appsv1.Deployment{}
+			Expect(k8sClient.Get(ctx, key, dep)).To(Succeed())
+			Expect(dep.Spec.Template.Spec.Containers).To(HaveLen(1))
+			c := dep.Spec.Template.Spec.Containers[0]
+			Expect(c.Image).To(Equal("vllm/vllm-openai:v0.22.0"))
+			Expect(c.Args).To(ContainElement("--model=Qwen/Qwen3-8B-Instruct"))
+			Expect(c.Resources.Limits).To(HaveKey(corev1.ResourceName("nvidia.com/gpu")))
+			Expect(c.Env).To(ContainElement(corev1.EnvVar{Name: "VLLM_USE_MODELSCOPE", Value: "true"}))
+			Expect(dep.OwnerReferences).NotTo(BeEmpty())
+
+			httpSvc := &corev1.Service{}
+			Expect(k8sClient.Get(ctx, key, httpSvc)).To(Succeed())
+			Expect(httpSvc.Spec.Selector).To(HaveKeyWithValue("serving.hearth.dev/llmservice", svcName))
+
+			updated := &servingv1alpha1.LLMService{}
+			Expect(k8sClient.Get(ctx, key, updated)).To(Succeed())
+			Expect(updated.Status.ResolvedRuntime).To(Equal(runtimeName))
+			Expect(updated.Status.EndpointURL).To(ContainSubstring(svcName))
+		})
+
+		It("is idempotent across repeated reconciles", func() {
+			_, err := reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("marks the service Degraded when the runtime is missing", func() {
+			rt := &servingv1alpha1.InferenceRuntime{ObjectMeta: metav1.ObjectMeta{Name: runtimeName}}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, rt))).To(Succeed())
+			Expect(k8sClient.Get(ctx, runtimeKey, &servingv1alpha1.InferenceRuntime{})).NotTo(Succeed())
+
+			_, err := reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).To(HaveOccurred())
+
+			updated := &servingv1alpha1.LLMService{}
+			Expect(k8sClient.Get(ctx, key, updated)).To(Succeed())
+			Expect(updated.Status.Phase).To(Equal(servingv1alpha1.PhaseDegraded))
 		})
 	})
 })

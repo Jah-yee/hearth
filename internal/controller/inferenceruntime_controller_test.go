@@ -48,10 +48,17 @@ var _ = Describe("InferenceRuntime Controller", func() {
 			if err != nil && errors.IsNotFound(err) {
 				resource := &servingv1alpha1.InferenceRuntime{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
+						Name: resourceName,
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: servingv1alpha1.InferenceRuntimeSpec{
+						Vendor: "nvidia",
+						Container: servingv1alpha1.RuntimeContainer{
+							Image: "vllm/vllm-openai:v0.22.0",
+							Port:  servingv1alpha1.RuntimePort{Name: "http", ContainerPort: 8000},
+						},
+						Accelerator: servingv1alpha1.AcceleratorSpec{ResourceName: "nvidia.com/gpu"},
+						Metrics:     servingv1alpha1.RuntimeMetrics{QueueDepth: "vllm:num_requests_waiting"},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
