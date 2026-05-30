@@ -1,4 +1,4 @@
-# Hearth (炉)
+# Hearth
 
 **Declarative, scale-to-zero serving for domestic open-source LLMs on your own Kubernetes —
 vendor-neutral across NVIDIA, Ascend, and more.**
@@ -15,7 +15,7 @@ with NVIDIA-vLLM / vLLM-Ascend / vLLM-MLU as **pluggable backends** behind one A
 ## Why Hearth
 
 The "deploy an LLM on K8s" space is crowded but **NVIDIA-first and English-first**. Hearth's design
-center is different: **vendor-neutral, domestic-runtime-first orchestration**, with private/"信创"
+center is different: **vendor-neutral, domestic-runtime-first orchestration**, with private/"XinChuang"
 delivery as a first-class concern. You write the model and the scaling intent; Hearth picks the
 backend, renders the workload, caches the weights, and scales it to zero when idle.
 
@@ -106,7 +106,7 @@ and the scale-to-zero data flow live in [`docs/`](docs) and the project proposal
 
 - **v0** — multi-backend abstraction on NVIDIA; model caching; gateway + KEDA scale-to-zero; Helm + dashboard.
 - **v1** — Ascend running on real NPUs; HAMi/Volcano integration; curated domestic-model catalog.
-- **v2** — Cambricon/Hygon; LoRA; air-gapped "信创" offline bundle.
+- **v2** — Cambricon/Hygon; LoRA; air-gapped "XinChuang" offline bundle.
 
 ## Contributing & License
 

@@ -21,6 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
 )
@@ -62,6 +63,15 @@ func RenderVLLMPodSpec(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.Infe
 		LivenessProbe:  rt.Spec.Health.Liveness.DeepCopy(),
 		StartupProbe:   rt.Spec.Health.Startup.DeepCopy(),
 		VolumeMounts:   []corev1.VolumeMount{{Name: sharedMemoryVolume, MountPath: "/dev/shm"}},
+	}
+
+	// Load-gated readiness: even if the runtime omits probes, never let a slow model
+	// load trip liveness or route traffic to a not-yet-loaded pod.
+	if container.ReadinessProbe == nil {
+		container.ReadinessProbe = healthProbe(port.Name)
+	}
+	if container.StartupProbe == nil {
+		container.StartupProbe = defaultStartupProbe(port.Name)
 	}
 
 	pod := corev1.PodSpec{
@@ -149,6 +159,19 @@ func computeResources(svc *servingv1alpha1.LLMService) corev1.ResourceRequiremen
 		r.Limits = nil
 	}
 	return r
+}
+
+func healthProbe(portName string) *corev1.Probe {
+	return &corev1.Probe{ProbeHandler: corev1.ProbeHandler{
+		HTTPGet: &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromString(portName)},
+	}}
+}
+
+func defaultStartupProbe(portName string) *corev1.Probe {
+	p := healthProbe(portName)
+	p.PeriodSeconds = 10
+	p.FailureThreshold = 60 // ~10 min budget for weight loading
+	return p
 }
 
 func renderEnv(in []corev1.EnvVar, data TemplateData) ([]corev1.EnvVar, error) {

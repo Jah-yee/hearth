@@ -45,11 +45,12 @@ func Resolve(model servingv1alpha1.ModelSpec) (backend.ResolvedModel, error) {
 
 	switch scheme {
 	case "hf", "huggingface":
-		return backend.ResolvedModel{Path: ref}, nil
+		return backend.ResolvedModel{Path: ref, Source: "hf"}, nil
 	case "modelscope":
 		return backend.ResolvedModel{
-			Path: ref,
-			Env:  []corev1.EnvVar{{Name: "VLLM_USE_MODELSCOPE", Value: "true"}},
+			Path:   ref,
+			Source: "modelscope",
+			Env:    []corev1.EnvVar{{Name: "VLLM_USE_MODELSCOPE", Value: "true"}},
 		}, nil
 	default:
 		return backend.ResolvedModel{}, fmt.Errorf("model uri scheme %q is not supported yet (use hf:// or modelscope://)", scheme)

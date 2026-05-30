@@ -76,6 +76,12 @@ func BuildDeployment(a BackendAdapter, svc *servingv1alpha1.LLMService, rt *serv
 	}
 	applyAccelerator(&pod, accel)
 
+	art, err := planCache(svc)
+	if err != nil {
+		return nil, err
+	}
+	applyCache(&pod, art)
+
 	replicas := DesiredReplicas(svc)
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},

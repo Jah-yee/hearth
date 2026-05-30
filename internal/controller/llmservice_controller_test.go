@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -83,6 +84,8 @@ var _ = Describe("LLMService Controller", func() {
 			// owner GC does not run in envtest, so clean children explicitly
 			Expect(k8sClient.DeleteAllOf(ctx, &appsv1.Deployment{}, client.InNamespace(namespace))).To(Succeed())
 			Expect(k8sClient.DeleteAllOf(ctx, &corev1.Service{}, client.InNamespace(namespace))).To(Succeed())
+			Expect(k8sClient.DeleteAllOf(ctx, &corev1.PersistentVolumeClaim{}, client.InNamespace(namespace))).To(Succeed())
+			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(namespace))).To(Succeed())
 		})
 
 		It("renders a Deployment and Service from the selected runtime", func() {
@@ -102,6 +105,10 @@ var _ = Describe("LLMService Controller", func() {
 			httpSvc := &corev1.Service{}
 			Expect(k8sClient.Get(ctx, key, httpSvc)).To(Succeed())
 			Expect(httpSvc.Spec.Selector).To(HaveKeyWithValue("serving.hearth.dev/llmservice", svcName))
+
+			// cache defaults to NodeLocalPVC, so a cache PVC is provisioned
+			pvc := &corev1.PersistentVolumeClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: svcName + "-cache", Namespace: namespace}, pvc)).To(Succeed())
 
 			updated := &servingv1alpha1.LLMService{}
 			Expect(k8sClient.Get(ctx, key, updated)).To(Succeed())

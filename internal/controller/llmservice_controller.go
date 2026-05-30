@@ -21,7 +21,9 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -51,7 +53,8 @@ type LLMServiceReconciler struct {
 // +kubebuilder:rbac:groups=serving.hearth.dev,resources=llmservices/finalizers,verbs=update
 // +kubebuilder:rbac:groups=serving.hearth.dev,resources=inferenceruntimes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile renders the vLLM Deployment and Service for an LLMService from its
 // selected InferenceRuntime, then reflects the result in status.
@@ -87,6 +90,26 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 	if err := r.apply(ctx, &svc, backend.BuildService(&svc, rt)); err != nil {
 		return r.fail(ctx, &svc, "ApplyService", err)
+	}
+
+	pvc, err := backend.BuildCachePVC(&svc)
+	if err != nil {
+		return r.fail(ctx, &svc, "Cache", err)
+	}
+	if pvc != nil {
+		if err := r.ensureCreated(ctx, &svc, pvc); err != nil {
+			return r.fail(ctx, &svc, "ApplyCachePVC", err)
+		}
+	}
+
+	job, err := backend.BuildPrewarmJob(&svc, rt, resolved)
+	if err != nil {
+		return r.fail(ctx, &svc, "Prewarm", err)
+	}
+	if job != nil {
+		if err := r.ensureCreated(ctx, &svc, job); err != nil {
+			return r.fail(ctx, &svc, "ApplyPrewarmJob", err)
+		}
 	}
 
 	var live appsv1.Deployment
@@ -151,6 +174,18 @@ func (r *LLMServiceReconciler) apply(ctx context.Context, owner *servingv1alpha1
 	return r.Apply(ctx, ac, fieldOwner, client.ForceOwnership)
 }
 
+// ensureCreated creates an owned object once and ignores AlreadyExists. Used for the
+// cache PVC and prewarm Job, which have immutable fields and are never updated in place.
+func (r *LLMServiceReconciler) ensureCreated(ctx context.Context, owner *servingv1alpha1.LLMService, obj client.Object) error {
+	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
+		return err
+	}
+	if err := r.Create(ctx, obj); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
 func (r *LLMServiceReconciler) updateStatus(ctx context.Context, svc *servingv1alpha1.LLMService, runtimeName string, dep *appsv1.Deployment) (ctrl.Result, error) {
 	phase := servingv1alpha1.PhasePending
 	switch {
@@ -204,6 +239,8 @@ func (r *LLMServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&servingv1alpha1.LLMService{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
+		Owns(&batchv1.Job{}).
 		Named("llmservice").
 		Complete(r)
 }

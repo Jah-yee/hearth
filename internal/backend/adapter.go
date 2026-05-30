@@ -36,6 +36,10 @@ type ResolvedModel struct {
 	// a local cache path once caching lands).
 	Path string
 
+	// Source is the registry the model is fetched from ("hf" or "modelscope"); it
+	// selects the prewarm download command.
+	Source string
+
 	// Env is extra environment required to load the model (e.g. VLLM_USE_MODELSCOPE).
 	Env []corev1.EnvVar
 }
