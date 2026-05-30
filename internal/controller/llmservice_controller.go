@@ -61,6 +61,7 @@ type LLMServiceReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=keda.sh,resources=scaledobjects,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile renders the vLLM Deployment and Service for an LLMService from its
 // selected InferenceRuntime, then reflects the result in status.
@@ -124,8 +125,11 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
-	if err := r.applyScaledObject(ctx, &svc); err != nil {
+	if err := r.applyOptional(ctx, &svc, backend.BuildScaledObject(&svc), "ScaledObject (autoscaling disabled)"); err != nil {
 		return r.fail(ctx, &svc, "ApplyScaledObject", err)
+	}
+	if err := r.applyOptional(ctx, &svc, backend.BuildServiceMonitor(&svc), "ServiceMonitor (metrics scraping disabled)"); err != nil {
+		return r.fail(ctx, &svc, "ApplyServiceMonitor", err)
 	}
 
 	var live appsv1.Deployment
@@ -190,17 +194,16 @@ func (r *LLMServiceReconciler) apply(ctx context.Context, owner *servingv1alpha1
 	return r.Apply(ctx, ac, fieldOwner, client.ForceOwnership)
 }
 
-// applyScaledObject server-side applies the KEDA ScaledObject. If KEDA is not installed
-// (the CRD is absent), it logs and continues — the backend then simply runs at its
-// default replica count instead of autoscaling, rather than failing reconcile.
-func (r *LLMServiceReconciler) applyScaledObject(ctx context.Context, svc *servingv1alpha1.LLMService) error {
-	so := backend.BuildScaledObject(svc)
-	if err := controllerutil.SetControllerReference(svc, so, r.Scheme); err != nil {
+// applyOptional SSA-applies an unstructured dependency (KEDA ScaledObject, Prometheus
+// ServiceMonitor). If its CRD is absent, it logs skipMsg and continues rather than
+// failing reconcile, so Hearth runs without those optional operators installed.
+func (r *LLMServiceReconciler) applyOptional(ctx context.Context, owner *servingv1alpha1.LLMService, obj *unstructured.Unstructured, skipMsg string) error {
+	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
 		return err
 	}
-	err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(so), fieldOwner, client.ForceOwnership)
+	err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), fieldOwner, client.ForceOwnership)
 	if meta.IsNoMatchError(err) {
-		logf.FromContext(ctx).Info("KEDA not installed; skipping ScaledObject (autoscaling disabled)")
+		logf.FromContext(ctx).Info("CRD not installed; skipping " + skipMsg)
 		return nil
 	}
 	return err

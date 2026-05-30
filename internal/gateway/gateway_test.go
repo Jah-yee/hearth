@@ -151,6 +151,28 @@ func TestBackpressureReturns429WhenQueueFull(t *testing.T) {
 	close(release)
 }
 
+func TestExposesPrometheusMetrics(t *testing.T) {
+	g := NewWithT(t)
+	be := &stubBackend{}
+	be.ready.Store(true)
+	srv := httptest.NewServer(be.handler())
+	defer srv.Close()
+
+	fe := httptest.NewServer(newGateway(t, srv.URL, 10, time.Second).Handler())
+	defer fe.Close()
+
+	resp, err := http.Post(fe.URL+"/v1/x", "application/json", nil)
+	g.Expect(err).NotTo(HaveOccurred())
+	_ = resp.Body.Close()
+
+	m, err := http.Get(fe.URL + gateway.MetricsPath)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer func() { _ = m.Body.Close() }()
+	body, _ := io.ReadAll(m.Body)
+	g.Expect(string(body)).To(ContainSubstring("hearth_gateway_requests_total"))
+	g.Expect(string(body)).To(ContainSubstring("hearth_gateway_activation_wait_seconds"))
+}
+
 func queuePending(base string) int64 {
 	resp, err := http.Get(base + gateway.QueuePath)
 	if err != nil {

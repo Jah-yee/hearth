@@ -30,6 +30,9 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Environment variables read by ConfigFromEnv (and set by the operator-rendered Deployment).
@@ -43,6 +46,8 @@ const (
 	DefaultListenAddr = ":8080"
 	// QueuePath reports the pending-request count for the scaler.
 	QueuePath = "/hearth/queue"
+	// MetricsPath serves Prometheus metrics.
+	MetricsPath = "/metrics"
 )
 
 // Config configures a Gateway.
@@ -65,6 +70,31 @@ func ConfigFromEnv() Config {
 	return cfg
 }
 
+type metrics struct {
+	registry   *prometheus.Registry
+	pending    prometheus.Gauge
+	requests   *prometheus.CounterVec
+	rejections *prometheus.CounterVec
+	coldStart  prometheus.Histogram
+}
+
+func newMetrics() *metrics {
+	m := &metrics{
+		registry: prometheus.NewRegistry(),
+		pending: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "hearth_gateway_pending", Help: "Requests admitted and waiting or in flight (the scaler's demand signal)."}),
+		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "hearth_gateway_requests_total", Help: "Responses by HTTP status code."}, []string{"code"}),
+		rejections: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "hearth_gateway_rejections_total", Help: "Rejected requests by reason."}, []string{"reason"}),
+		coldStart: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "hearth_gateway_activation_wait_seconds", Help: "Time spent holding a request until the backend was ready.",
+			Buckets: []float64{0.01, 0.1, 1, 5, 15, 30, 60, 120, 300}}),
+	}
+	m.registry.MustRegister(m.pending, m.requests, m.rejections, m.coldStart)
+	return m
+}
+
 // Gateway is a buffering reverse proxy for a single backend.
 type Gateway struct {
 	cfg     Config
@@ -72,6 +102,7 @@ type Gateway struct {
 	proxy   *httputil.ReverseProxy
 	sem     chan struct{}
 	pending atomic.Int64
+	m       *metrics
 	probe   *http.Client
 	now     func() time.Time
 }
@@ -96,6 +127,7 @@ func New(cfg Config) (*Gateway, error) {
 		backend: u,
 		proxy:   httputil.NewSingleHostReverseProxy(u),
 		sem:     make(chan struct{}, cfg.MaxQueue),
+		m:       newMetrics(),
 		probe:   &http.Client{Timeout: 2 * time.Second},
 		now:     time.Now,
 	}, nil
@@ -111,6 +143,7 @@ func (g *Gateway) Handler() http.Handler {
 	mux.HandleFunc(QueuePath, func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]int64{"pending": g.pending.Load()})
 	})
+	mux.Handle(MetricsPath, promhttp.HandlerFor(g.m.registry, promhttp.HandlerOpts{}))
 	mux.HandleFunc("/", g.serve)
 	return mux
 }
@@ -121,21 +154,30 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request) {
 	case g.sem <- struct{}{}:
 		defer func() { <-g.sem }()
 	default:
+		g.m.rejections.WithLabelValues("queue_full").Inc()
+		g.m.requests.WithLabelValues("429").Inc()
 		w.Header().Set("Retry-After", "5")
 		http.Error(w, "gateway queue full", http.StatusTooManyRequests)
 		return
 	}
 
 	// Demand signal for the scaler, raised for the whole hold-and-serve window.
-	g.pending.Add(1)
-	defer g.pending.Add(-1)
+	g.m.pending.Set(float64(g.pending.Add(1)))
+	defer func() { g.m.pending.Set(float64(g.pending.Add(-1))) }()
 
+	waitStart := g.now()
 	if !g.waitForBackend(r.Context()) {
+		g.m.rejections.WithLabelValues("activation_timeout").Inc()
+		g.m.requests.WithLabelValues("503").Inc()
 		w.Header().Set("Retry-After", "10")
 		http.Error(w, "backend not ready (activation timeout)", http.StatusServiceUnavailable)
 		return
 	}
-	g.proxy.ServeHTTP(w, r)
+	g.m.coldStart.Observe(g.now().Sub(waitStart).Seconds())
+
+	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	g.proxy.ServeHTTP(rec, r)
+	g.m.requests.WithLabelValues(strconv.Itoa(rec.status)).Inc()
 }
 
 // waitForBackend blocks until the backend is ready, the request is canceled, or the
@@ -168,4 +210,22 @@ func (g *Gateway) backendReady(ctx context.Context) bool {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
+}
+
+// statusRecorder captures the proxied response status for metrics while passing
+// through streaming (SSE) flushes.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusRecorder) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }

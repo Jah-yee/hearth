@@ -55,6 +55,14 @@ func gatewaySelectorLabels(svc *servingv1alpha1.LLMService) map[string]string {
 	}
 }
 
+// gatewayServiceLabels are the gateway Service's metadata labels: the selector labels
+// plus the shared llmservice label so one ServiceMonitor selects gateway + backend.
+func gatewayServiceLabels(svc *servingv1alpha1.LLMService) map[string]string {
+	l := gatewaySelectorLabels(svc)
+	l[llmServiceLabel] = svc.Name
+	return l
+}
+
 // BuildBackendService is the internal ClusterIP Service the gateway forwards to.
 func BuildBackendService(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime) *corev1.Service {
 	return &corev1.Service{
@@ -76,7 +84,7 @@ func BuildBackendService(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.In
 func BuildGatewayService(svc *servingv1alpha1.LLMService) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
-		ObjectMeta: metav1.ObjectMeta{Name: GatewayServiceName(svc), Namespace: svc.Namespace, Labels: gatewaySelectorLabels(svc)},
+		ObjectMeta: metav1.ObjectMeta{Name: GatewayServiceName(svc), Namespace: svc.Namespace, Labels: gatewayServiceLabels(svc)},
 		Spec: corev1.ServiceSpec{
 			Selector: gatewaySelectorLabels(svc),
 			Ports: []corev1.ServicePort{{
