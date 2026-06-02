@@ -5,8 +5,8 @@ Thanks for your interest! Hearth is an early-stage, vendor-neutral Kubernetes op
 differentiator. It's small, moving fast, and very open to help. This guide gets you productive
 quickly.
 
-By participating you agree to be respectful and constructive. Contributions are accepted under the
-project's **Apache-2.0** license (inbound = outbound).
+By participating you agree to uphold our [Code of Conduct](CODE_OF_CONDUCT.md). Contributions are
+accepted under the project's **Apache-2.0** license (inbound = outbound).
 
 ## Where Hearth's boundary is (please read first)
 

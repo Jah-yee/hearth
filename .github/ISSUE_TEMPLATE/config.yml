@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / Discussion
+    url: https://github.com/hearth-project/hearth/discussions
+    about: Ask questions and discuss ideas here.
+  - name: Security vulnerability
+    url: https://github.com/hearth-project/hearth/security/advisories/new
+    about: Please report security issues privately, not as a public issue.
