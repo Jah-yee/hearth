@@ -142,6 +142,12 @@ docker-build-gateway: ## Build the data-plane gateway image.
 docker-push-gateway: ## Push the data-plane gateway image.
 	$(CONTAINER_TOOL) push ${GATEWAY_IMG}
 
+STUB_IMG ?= hearth.dev/vllm-stub:e2e
+
+.PHONY: docker-build-stub
+docker-build-stub: ## Build the CPU vllm-stub image used by the no-GPU e2e harness.
+	$(CONTAINER_TOOL) build -f Dockerfile.stub -t ${STUB_IMG} .
+
 .PHONY: helm-crds
 helm-crds: manifests ## Sync generated CRDs into the Helm chart's crds/ directory.
 	cp config/crd/bases/*.yaml charts/hearth/crds/
